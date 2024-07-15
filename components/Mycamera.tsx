@@ -1,30 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Camera,CameraView } from 'expo-camera';
-import FileSystem from "expo-file-system";
+import { Camera, CameraView } from 'expo-camera';
+
 
 const Mycamera = () => {
-  // カメラの許可状態を管理するstate
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  // カメラの参照を管理するstate
   const [camera, setCamera] = useState<Camera | null>(null);
 
   useEffect(() => {
-    // コンポーネントがマウントされたときにカメラの許可を要求
     (async () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
       setHasPermission(status === 'granted');
     })();
   }, []);
 
-  // 写真を撮影する関数
   const takePicture = async () => {
     if (camera) {
       const photo = await camera.takePictureAsync({ base64: true });
       console.log('写真が撮影されました');
-      // ここで撮影した写真を使用して何かを行うことができます
-      //写真をGoogle Cloud Vision APIに送信して、画像認識を行う
-      
+
+      const body = JSON.stringify({
+        requests: [
+          {
+            image: {
+              content: photo.base64,
+            },
+            features: [
+              { type: 'LABEL_DETECTION', maxResults: 10 },
+            ],
+          },
+        ],
+      });
+
+      const response = await fetch(
+        `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          method: 'POST',
+          body,
+        }
+      );
+
+      const responseJson = await response.json();
+      console.log(responseJson);
     }
   };
 
@@ -40,9 +61,8 @@ const Mycamera = () => {
       <CameraView
         style={styles.camera}
         onCameraReady={() => console.log('カメラ準備完了')}
-        // setCamera関数を使ってcameraステートを更新
         ref={(ref) => setCamera(ref)}
-         pointerEvents="none"
+        pointerEvents="none"
       >
         <View style={styles.buttonContainer}>
           <TouchableOpacity onPress={takePicture} style={styles.button}>
@@ -52,7 +72,7 @@ const Mycamera = () => {
       </CameraView>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
