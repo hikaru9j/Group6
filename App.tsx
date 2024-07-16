@@ -2,11 +2,11 @@ import React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import TakePhotoScreen from './components/TakePhotoScreen';
-import Test from './components/Test';
+import Gpt_ocr from './components/Gpt_ocr';
 const App = () => {
   return (
     <View style={styles.container}>
-      <TakePhotoScreen />
+      <Gpt_ocr />
     </View>
   );
 }

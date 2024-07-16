@@ -1,29 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Button, Alert, SafeAreaView } from 'react-native';
+import { StyleSheet, Text, View, Button, Alert, SafeAreaView,ActivityIndicator, Modal } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 
-const API_KEY="";
 
-const TakePhotoScreen= () => {
+const CHATGPT_API_KEY = "";
+
+const Gpt_ocr = () => {
     const [hasCameraPermission, setHasCameraPermission] = useState(false);
     const [hasMediaLibraryPermission, setHasMediaLibraryPermission] = useState(false);
-    const [extractedText, setExtractedText] = useState('');
+    const [extractedDrinks, setExtractedDrinks] = useState([]);
 
-//useeffectはコンポーネントがまだレンダリングされていない時に実行される
-//最初にユーザに対してカメラ許可を求める
     useEffect(() => {
         const requestPermissions = async () => {
             const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
             const { status: mediaLibraryStatus } = await MediaLibrary.requestPermissionsAsync();
-//===は値と型が等しい場合にtrueを返す
 
             setHasCameraPermission(cameraStatus === 'granted');
             setHasMediaLibraryPermission(mediaLibraryStatus === 'granted');
-//||はor, &&はand
-//!==は値と型が等しくない場合にtrueを返す
 
             if (cameraStatus !== 'granted' || mediaLibraryStatus !== 'granted') {
                 Alert.alert(
@@ -37,8 +33,7 @@ const TakePhotoScreen= () => {
         requestPermissions();
     }, []);
 
-    const takePictureAndSave = async () => {
-//!はnot,||はor
+    const takePictureAndProcess = async () => {
         if (!hasCameraPermission || !hasMediaLibraryPermission) {
             Alert.alert('Permission Required', 'Camera and media library permissions are needed.');
             return;
@@ -47,77 +42,91 @@ const TakePhotoScreen= () => {
         const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
+            aspect: [4, 3],
             quality: 1,
             base64: true,
         });
 
         if (!result.canceled && result.assets && result.assets.length > 0) {
             const localUri = result.assets[0].uri;
-            const base64Image=result.assets[0].base64;
+            const base64Image = result.assets[0].base64;
 
-            //カメラロールに保存
             await MediaLibrary.saveToLibraryAsync(localUri);
-            console.log("Base64 Image (first 50 chars):", base64Image?.substring(0, 50));
-            //VisionAPIに送信
-            try{
-                const apiResult = await sendToVisionAPI(base64Image);
-                console.log("Vision API Result:", apiResult);
-                setExtractedText(apiResult.text || "テキストが検出されませんでした。");
-
-            }catch(error){
-                console.error("Error sending to Vision API:", error);
-                Alert.alert('Error', 'Failed to send to Vision API.');
+            
+       
+            try {
+                const drinks = await extractDrinksWithChatGPT(base64Image);
+                setExtractedDrinks(drinks);
+                console.log("Extracted drinks:", drinks);
+                Alert.alert('Success', 'The picture has been processed and drinks extracted.');
+            } catch(error) {
+                console.error("Error processing image:", error);
+                Alert.alert('Error', 'Failed to process the image.');
             }
-
-            Alert.alert('Success', 'The picture has been saved to your camera roll.'); //ポップアップ
         }
     };
 
-   
-
-    const sendToVisionAPI = async (base64Image: string) => {
-     
-        try{
+    const extractDrinksWithChatGPT = async (base64Image) => {
+        try {
             const response = await axios.post(
-                `https://vision.googleapis.com/v1/images:annotate?key=${API_KEY}`,
+                'https://api.openai.com/v1/chat/completions',
                 {
-                    requests: [
+                    model: "gpt-4o",
+                    messages: [
                         {
-                            image: {
-                                content: base64Image,
-                            },
-                            features: [
+                            role: "user",
+                            content: [
                                 {
-                                    type: 'TEXT_DETECTION',
+                                    type: "text",
+                                    text: "This image contains a menu. Please extract only the names of alcoholic drinks from this menu. Return the results as a comma-separated list."
                                 },
-                            ],
-                        },
+                                {
+                                    type: "image_url",
+                                    image_url: {
+                                        url: `data:image/jpeg;base64,${base64Image}`
+                                    }
+                                }
+                            ]
+                        }
                     ],
+                    max_tokens: 300
                 },
-                { timeout: 30000 } 
+                {
+                    headers: {
+                        'Authorization': `Bearer ${CHATGPT_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
             );
-            return { text: response.data.responses[0].fullTextAnnotation.text };
-        }catch(error){
-            console.error("Error sending to Vision API:", error);
+            console.log("ChatGPT API response:", response.data); 
+            const extracted_drinks_list = response.data.choices[0].message.content.split(',').map(drink => drink.trim());
+            console.log("Extracted drinks list:", extracted_drinks_list);
+            return extracted_drinks_list;
+        } catch (error) {
+            console.error("Error calling ChatGPT API:", error);
             throw error;
-        }}
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container}>
             <Text style={styles.instruction}>メニューの写真を撮ってください</Text>
             <View style={styles.buttonContainer}>
-                <Button title="写真を撮る" onPress={()=>takePictureAndSave()} />
-                
+                <Button title="写真を撮る" onPress={takePictureAndProcess} />
             </View>
-            {extractedText ? (
+            {extractedDrinks.length > 0 && (
                 <View style={styles.resultContainer}>
-                    <Text style={styles.resultTitle}>抽出されたテキスト</Text>
-                    <Text style={styles.resultText}>{extractedText}</Text>
-                    </View>
-            ) : null}
+                    <Text style={styles.resultTitle}>抽出されたドリンク</Text>
+                    {extractedDrinks.map((drink, index) => (
+                        <Text key={index} style={styles.resultText}>{drink}</Text>
+                    ))}
+                </View>
+            )}
+             
         </SafeAreaView>
     );
-}
+};
+
 
 const styles = StyleSheet.create({
     container: {
@@ -147,8 +156,8 @@ const styles = StyleSheet.create({
     },
     resultText: {
         fontSize: 14,
-    }
+    },
 
 });
 
-export default TakePhotoScreen;
+export default Gpt_ocr;
