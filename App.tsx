@@ -1,13 +1,12 @@
 import React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import Mycamera from "./components/Mycamera";// MyCamera コンポーネントをインポート
-import Test from "./components/Test";// MyCamera コンポーネントをインポート
-
+import TakePhotoScreen from './components/TakePhotoScreen';
+import Gpt_ocr from './components/Gpt_ocr';
 const App = () => {
   return (
     <View style={styles.container}>
-      <Test />
+      <Gpt_ocr />
     </View>
   );
 }
