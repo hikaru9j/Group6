@@ -12,6 +12,8 @@ const Gpt_ocr = () => {
     const [hasCameraPermission, setHasCameraPermission] = useState(false);
     const [hasMediaLibraryPermission, setHasMediaLibraryPermission] = useState(false);
     const [extractedDrinks, setExtractedDrinks] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+
 
     useEffect(() => {
         const requestPermissions = async () => {
@@ -53,7 +55,7 @@ const Gpt_ocr = () => {
 
             await MediaLibrary.saveToLibraryAsync(localUri);
             
-       
+            setIsLoading(true); 
             try {
                 const drinks = await extractDrinksWithChatGPT(base64Image);
                 setExtractedDrinks(drinks);
@@ -62,7 +64,9 @@ const Gpt_ocr = () => {
             } catch(error) {
                 console.error("Error processing image:", error);
                 Alert.alert('Error', 'Failed to process the image.');
-            }
+            }finally {
+                setIsLoading(false);  // ローディング終了
+            } 
         }
     };
 
@@ -114,13 +118,19 @@ const Gpt_ocr = () => {
             <View style={styles.buttonContainer}>
                 <Button title="写真を撮る" onPress={takePictureAndProcess} />
             </View>
-            {extractedDrinks.length > 0 && (
+            {isLoading ? (
+                <View style={styles.resultContainer}>
+                    <ActivityIndicator size="large" color="#0000ff" />
+                </View>
+            ) : (
+            extractedDrinks.length > 0 && (
                 <View style={styles.resultContainer}>
                     <Text style={styles.resultTitle}>抽出されたドリンク</Text>
                     {extractedDrinks.map((drink, index) => (
                         <Text key={index} style={styles.resultText}>{drink}</Text>
                     ))}
                 </View>
+            )
             )}
              
         </SafeAreaView>
@@ -142,7 +152,8 @@ const styles = StyleSheet.create({
     },
     buttonContainer: {
         width: '80%',
-    },resultContainer: {
+    },
+    resultContainer: {
         marginTop: 20,
         padding: 10,
         backgroundColor: '#fff',
